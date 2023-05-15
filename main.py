@@ -1,10 +1,16 @@
+import hashlib
+
+import os
+
 class User:
 
-    def __init__(self, name, password):
+    def __init__(self, name, password_hash, salt):
 
         self.name = name
 
-        self.password = password
+        self.password_hash = password_hash
+
+        self.salt = salt
 
         self.logged_in = False
 
@@ -12,9 +18,13 @@ class User:
 
         return self.name
 
-    def get_password(self):
+    def get_password_hash(self):
 
-        return self.password
+        return self.password_hash
+
+    def get_salt(self):
+
+        return self.salt
 
     def is_logged_in(self):
 
@@ -36,7 +46,11 @@ class Verb:
 
     def signup(self, name, password):
 
-        user = User(name, password)
+        salt = os.urandom(32)
+
+        password_hash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000)
+
+        user = User(name, password_hash, salt)
 
         self.users.append(user)
 
@@ -48,13 +62,19 @@ class Verb:
 
         for user in self.users:
 
-            if user.get_name() == name and user.get_password() == password:
+            if user.get_name() == name:
 
-                user.logged_in = True
+                salt = user.get_salt()
 
-                self.save_users()
+                password_hash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000)
 
-                return user
+                if password_hash == user.get_password_hash():
+
+                    user.logged_in = True
+
+                    self.save_users()
+
+                    return user
 
         return None
 
@@ -66,9 +86,9 @@ class Verb:
 
                 for line in f:
 
-                    name, password = line.strip().split(": ")
+                    name, password_hash, salt = line.strip().split(": ")
 
-                    user = User(name, password)
+                    user = User(name, bytes.fromhex(password_hash), bytes.fromhex(salt))
 
                     self.users.append(user)
 
@@ -82,4 +102,6 @@ class Verb:
 
             for user in self.users:
 
-                f.write(f"{user.get_name()}: {user.get_password()}\n")
+                f.write(f"{user.get_name()}: {user.get_password_hash().hex()}: {user.get_salt().hex()}\n")
+
+
